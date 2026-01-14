@@ -1014,6 +1014,522 @@ fn extract_node_id(attrs: &[opentelemetry_proto::tonic::common::v1::KeyValue]) -
 
 ---
 
+## AI Agent Layer
+
+Dora Studio integrates AI-powered assistance via a bottom chat bar in each mini-app (Claude Code style).
+
+### Architecture Overview
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    AGENT COORDINATOR                        │
+│  ┌─────────────┐  ┌─────────────┐  ┌───────────────────┐   │
+│  │ Tool        │  │ Context     │  │ LLM Client        │   │
+│  │ Registry    │  │ Manager     │  │ (Multi-provider)  │   │
+│  └──────┬──────┘  └──────┬──────┘  └─────────┬─────────┘   │
+│         └────────────────┴───────────────────┘              │
+│                          │                                  │
+│                    AGENT LOOP                               │
+│         ┌────────────────┴────────────────┐                 │
+│         │ 1. Get current app context      │                 │
+│         │ 2. Send to LLM with app tools   │                 │
+│         │ 3. Execute tool calls locally   │                 │
+│         │ 4. Stream response to chat bar  │                 │
+│         │ 5. Update app state             │                 │
+│         └─────────────────────────────────┘                 │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Agent Coordinator
+
+```rust
+// dora-studio-client/src/agent/mod.rs
+
+use std::sync::Arc;
+use tokio::sync::Mutex;
+
+pub struct AgentCoordinator {
+    llm_client: Arc<dyn LlmClient>,
+    tool_registry: ToolRegistry,
+    context_manager: ContextManager,
+}
+
+impl AgentCoordinator {
+    pub fn new(config: AgentConfig) -> Self {
+        let llm_client: Arc<dyn LlmClient> = match config.provider {
+            Provider::Claude => Arc::new(ClaudeClient::new(&config.api_key)),
+            Provider::OpenAI => Arc::new(OpenAIClient::new(&config.api_key)),
+            Provider::Ollama => Arc::new(OllamaClient::new(&config.endpoint)),
+        };
+
+        Self {
+            llm_client,
+            tool_registry: ToolRegistry::new(),
+            context_manager: ContextManager::new(),
+        }
+    }
+
+    /// Process user message and return AI response
+    pub async fn process_message(
+        &self,
+        app_id: &str,
+        message: &str,
+        app_state: &AppState,
+    ) -> Result<AgentResponse, AgentError> {
+        // 1. Build context from app state
+        let context = self.context_manager.build_context(app_id, app_state);
+
+        // 2. Get tools for this app
+        let tools = self.tool_registry.get_tools(app_id);
+
+        // 3. Send to LLM
+        let mut response = self.llm_client.chat(
+            &context,
+            message,
+            &tools,
+        ).await?;
+
+        // 4. Execute tool calls
+        while let Some(tool_call) = response.tool_calls.pop() {
+            let result = self.execute_tool(&tool_call).await?;
+            response = self.llm_client.continue_with_result(
+                &context,
+                &tool_call,
+                &result,
+            ).await?;
+        }
+
+        Ok(response)
+    }
+
+    async fn execute_tool(&self, tool_call: &ToolCall) -> Result<ToolResult, AgentError> {
+        self.tool_registry.execute(tool_call).await
+    }
+}
+```
+
+### LLM Client Trait
+
+```rust
+// dora-studio-client/src/agent/llm_client.rs
+
+#[async_trait]
+pub trait LlmClient: Send + Sync {
+    /// Send chat message with tools
+    async fn chat(
+        &self,
+        context: &Context,
+        message: &str,
+        tools: &[ToolDefinition],
+    ) -> Result<AgentResponse, LlmError>;
+
+    /// Continue conversation with tool result
+    async fn continue_with_result(
+        &self,
+        context: &Context,
+        tool_call: &ToolCall,
+        result: &ToolResult,
+    ) -> Result<AgentResponse, LlmError>;
+
+    /// Stream response tokens
+    async fn chat_stream(
+        &self,
+        context: &Context,
+        message: &str,
+        tools: &[ToolDefinition],
+    ) -> Result<impl Stream<Item = StreamChunk>, LlmError>;
+}
+
+pub struct ClaudeClient {
+    client: anthropic_sdk::Client,
+    model: String,
+}
+
+impl ClaudeClient {
+    pub fn new(api_key: &str) -> Self {
+        Self {
+            client: anthropic_sdk::Client::new(api_key),
+            model: "claude-sonnet-4-20250514".to_string(),
+        }
+    }
+}
+
+#[async_trait]
+impl LlmClient for ClaudeClient {
+    async fn chat(
+        &self,
+        context: &Context,
+        message: &str,
+        tools: &[ToolDefinition],
+    ) -> Result<AgentResponse, LlmError> {
+        let request = self.client.messages()
+            .model(&self.model)
+            .system(&context.system_prompt)
+            .messages(context.history.clone())
+            .user(message)
+            .tools(tools.iter().map(|t| t.to_claude_tool()).collect())
+            .max_tokens(4096);
+
+        let response = request.send().await?;
+
+        Ok(AgentResponse::from_claude_response(response))
+    }
+
+    // ... other implementations
+}
+```
+
+### Tool Registry
+
+```rust
+// dora-studio-client/src/agent/tools.rs
+
+use std::collections::HashMap;
+
+pub struct ToolRegistry {
+    tools: HashMap<String, Vec<Box<dyn Tool>>>,
+}
+
+impl ToolRegistry {
+    pub fn new() -> Self {
+        let mut registry = Self { tools: HashMap::new() };
+
+        // Register tools for each app
+        registry.register("dataflow-manager", vec![
+            Box::new(ListDataflowsTool),
+            Box::new(StartDataflowTool),
+            Box::new(StopDataflowTool),
+            Box::new(GetNodeMetricsTool),
+            Box::new(RestartDataflowTool),
+        ]);
+
+        registry.register("yaml-editor", vec![
+            Box::new(ValidateYamlTool),
+            Box::new(ExplainDataflowTool),
+            Box::new(SuggestFixTool),
+            Box::new(GenerateDataflowTool),
+            Box::new(AddNodeTool),
+        ]);
+
+        registry.register("log-viewer", vec![
+            Box::new(SearchLogsTool),
+            Box::new(AnalyzeLogsTool),
+            Box::new(FilterLogsTool),
+            Box::new(ExportLogsTool),
+        ]);
+
+        registry.register("telemetry-dashboard", vec![
+            Box::new(QueryMetricsTool),
+            Box::new(FindBottleneckTool),
+            Box::new(GetTraceTool),
+            Box::new(AnalyzeLatencyTool),
+        ]);
+
+        registry
+    }
+
+    pub fn get_tools(&self, app_id: &str) -> Vec<ToolDefinition> {
+        self.tools
+            .get(app_id)
+            .map(|tools| tools.iter().map(|t| t.definition()).collect())
+            .unwrap_or_default()
+    }
+
+    pub async fn execute(&self, call: &ToolCall) -> Result<ToolResult, AgentError> {
+        // Find and execute the tool
+        for tools in self.tools.values() {
+            for tool in tools {
+                if tool.name() == call.name {
+                    return tool.execute(&call.arguments).await;
+                }
+            }
+        }
+        Err(AgentError::ToolNotFound(call.name.clone()))
+    }
+}
+
+#[async_trait]
+pub trait Tool: Send + Sync {
+    fn name(&self) -> &str;
+    fn definition(&self) -> ToolDefinition;
+    async fn execute(&self, args: &serde_json::Value) -> Result<ToolResult, AgentError>;
+}
+```
+
+### Example Tool Implementation
+
+```rust
+// apps/dataflow-manager/src/tools.rs
+
+pub struct StartDataflowTool;
+
+#[async_trait]
+impl Tool for StartDataflowTool {
+    fn name(&self) -> &str {
+        "start_dataflow"
+    }
+
+    fn definition(&self) -> ToolDefinition {
+        ToolDefinition {
+            name: "start_dataflow".to_string(),
+            description: "Start a dataflow from a YAML file path".to_string(),
+            parameters: json!({
+                "type": "object",
+                "properties": {
+                    "yaml_path": {
+                        "type": "string",
+                        "description": "Path to the dataflow YAML file"
+                    },
+                    "name": {
+                        "type": "string",
+                        "description": "Optional name for the dataflow"
+                    }
+                },
+                "required": ["yaml_path"]
+            }),
+        }
+    }
+
+    async fn execute(&self, args: &serde_json::Value) -> Result<ToolResult, AgentError> {
+        let yaml_path = args["yaml_path"].as_str()
+            .ok_or(AgentError::InvalidArgument("yaml_path required"))?;
+
+        let name = args["name"].as_str();
+
+        // Call DoraClient to start dataflow
+        let client = get_dora_client().await?;
+        let uuid = client.start_dataflow(Path::new(yaml_path), name).await?;
+
+        Ok(ToolResult {
+            success: true,
+            output: format!("Dataflow started with UUID: {}", uuid),
+            data: Some(json!({ "uuid": uuid.to_string() })),
+        })
+    }
+}
+```
+
+### Chat Bar Widget
+
+```rust
+// dora-studio-widgets/src/chat_bar.rs
+
+use makepad_widgets::*;
+
+live_design! {
+    ChatBar = {{ChatBar}} {
+        width: Fill, height: Fit,
+        flow: Down,
+
+        // Chat history (collapsible)
+        chat_history = <View> {
+            width: Fill, height: 120,
+            visible: false,  // Expand when has messages
+
+            <PortalList> {
+                // Virtualized message list
+            }
+        }
+
+        // Input bar (always visible)
+        input_bar = <View> {
+            width: Fill, height: 44,
+            padding: 8,
+            spacing: 8,
+            align: { y: 0.5 },
+
+            prompt_icon = <Label> {
+                text: "💬"
+            }
+
+            input = <TextInput> {
+                width: Fill,
+                placeholder: "Ask AI..."
+                on_return: SendMessage
+            }
+
+            send_button = <Button> {
+                text: "↵"
+                on_click: SendMessage
+            }
+        }
+
+        // Status indicator
+        status = <Label> {
+            visible: false,
+            text: "Thinking..."
+        }
+    }
+}
+
+#[derive(Live, Widget)]
+pub struct ChatBar {
+    #[walk] walk: Walk,
+    #[layout] layout: Layout,
+
+    #[live] chat_history: View,
+    #[live] input_bar: View,
+    #[live] status: Label,
+
+    #[rust] messages: Vec<ChatMessage>,
+    #[rust] agent: Option<Arc<AgentCoordinator>>,
+    #[rust] app_id: String,
+}
+
+impl ChatBar {
+    pub fn set_agent(&mut self, agent: Arc<AgentCoordinator>, app_id: &str) {
+        self.agent = Some(agent);
+        self.app_id = app_id.to_string();
+    }
+
+    fn send_message(&mut self, cx: &mut Cx) {
+        let input = self.input_bar.text_input(id!(input));
+        let message = input.text();
+
+        if message.is_empty() {
+            return;
+        }
+
+        // Add user message
+        self.messages.push(ChatMessage::user(&message));
+        input.set_text("");
+
+        // Show thinking status
+        self.status.set_visible(true);
+        self.redraw(cx);
+
+        // Send to agent (async)
+        if let Some(agent) = &self.agent {
+            let agent = agent.clone();
+            let app_id = self.app_id.clone();
+            let message = message.clone();
+
+            cx.spawn(async move {
+                let response = agent.process_message(&app_id, &message, &AppState::default()).await;
+                // Send response back to UI thread via signal
+            });
+        }
+    }
+}
+
+impl Widget for ChatBar {
+    fn handle_event(&mut self, cx: &mut Cx, event: &Event, _scope: &mut Scope) {
+        match event {
+            Event::Actions(actions) => {
+                if self.input_bar.button(id!(send_button)).clicked(actions) {
+                    self.send_message(cx);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    fn draw_walk(&mut self, cx: &mut Cx2d, _scope: &mut Scope, walk: Walk) -> DrawStep {
+        self.draw_abs(cx, walk);
+        DrawStep::done()
+    }
+}
+```
+
+### Context Management
+
+```rust
+// dora-studio-client/src/agent/context.rs
+
+pub struct ContextManager {
+    max_history: usize,
+}
+
+impl ContextManager {
+    pub fn new() -> Self {
+        Self { max_history: 10 }
+    }
+
+    pub fn build_context(&self, app_id: &str, state: &AppState) -> Context {
+        let system_prompt = format!(
+            r#"You are an AI assistant integrated into Dora Studio, a dashboard for managing Dora dataflows.
+
+Current app: {}
+
+Available context:
+{}
+
+You have access to tools to interact with the Dora system. Use them to help the user.
+Be concise and actionable. Show tool results clearly."#,
+            app_id,
+            self.summarize_state(state)
+        );
+
+        Context {
+            system_prompt,
+            history: state.chat_history.iter()
+                .rev()
+                .take(self.max_history)
+                .rev()
+                .cloned()
+                .collect(),
+        }
+    }
+
+    fn summarize_state(&self, state: &AppState) -> String {
+        let mut summary = String::new();
+
+        if !state.dataflows.is_empty() {
+            summary.push_str(&format!(
+                "Active dataflows: {}\n",
+                state.dataflows.iter()
+                    .map(|d| format!("{} ({})", d.name, d.status))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ));
+        }
+
+        if !state.recent_errors.is_empty() {
+            summary.push_str(&format!(
+                "Recent errors: {}\n",
+                state.recent_errors.len()
+            ));
+        }
+
+        summary
+    }
+}
+```
+
+### Configuration
+
+```rust
+// dora-studio-client/src/agent/config.rs
+
+#[derive(Clone, Debug, Deserialize)]
+pub struct AgentConfig {
+    pub provider: Provider,
+    pub api_key: Option<String>,
+    pub endpoint: Option<String>,
+    pub model: Option<String>,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+pub enum Provider {
+    Claude,
+    OpenAI,
+    Ollama,
+}
+
+impl Default for AgentConfig {
+    fn default() -> Self {
+        Self {
+            provider: Provider::Claude,
+            api_key: std::env::var("ANTHROPIC_API_KEY").ok(),
+            endpoint: None,
+            model: None,
+        }
+    }
+}
+```
+
+---
+
 ## Widget System
 
 ### Theme (theme.rs)

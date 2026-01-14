@@ -726,6 +726,179 @@ dora-studio/
 
 ---
 
+## 11. AI Agent Capabilities
+
+Dora Studio integrates AI-powered assistance via a bottom chat bar in each mini-app, enabling natural language interaction with dataflows.
+
+### Design: Claude Code Style Chat Bar
+
+Each mini-app includes a contextual AI chat bar at the bottom:
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  Dataflow Manager                        [Start] [Refresh]  │
+├─────────────────────────────────────────────────────────────┤
+│                                                             │
+│                      (main app content)                     │
+│                                                             │
+├─────────────────────────────────────────────────────────────┤
+│ 💬 Ask AI: [Start the camera pipeline________________] [↵]  │
+│                                                             │
+│ AI: Starting dataflow... ✓ Started (uuid: abc123)          │
+│     4 nodes running. Camera capturing at 30 FPS.           │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### AI Tools by Mini-App
+
+#### Dataflow Manager Tools
+
+| Tool | Description | Example Intent |
+|------|-------------|----------------|
+| `list_dataflows` | Get all dataflows with status | "What dataflows are running?" |
+| `start_dataflow` | Start from YAML path | "Start the camera pipeline" |
+| `stop_dataflow` | Stop by ID or name | "Stop all dataflows" |
+| `get_dataflow_status` | Detailed status check | "Is yolo-detection healthy?" |
+| `get_node_metrics` | CPU/memory per node | "Which node uses most CPU?" |
+| `restart_dataflow` | Stop + start | "Restart the failed dataflow" |
+
+#### YAML Editor Tools
+
+| Tool | Description | Example Intent |
+|------|-------------|----------------|
+| `validate_yaml` | Check for errors | "Is this YAML valid?" |
+| `explain_dataflow` | Describe graph structure | "Explain what this dataflow does" |
+| `suggest_fix` | Auto-fix validation errors | "Fix the errors in my YAML" |
+| `generate_dataflow` | Create from description | "Create a dataflow with camera and YOLO" |
+| `add_node` | Insert node into YAML | "Add a logging node after yolo" |
+| `connect_nodes` | Wire inputs/outputs | "Connect camera output to detector input" |
+
+#### Log Viewer Tools
+
+| Tool | Description | Example Intent |
+|------|-------------|----------------|
+| `search_logs` | Query by pattern/level | "Show me all errors" |
+| `analyze_logs` | Summarize patterns | "What's causing the failures?" |
+| `filter_logs` | By node/dataflow/time | "Logs from yolo node last 5 min" |
+| `export_logs` | Save to file | "Export errors to CSV" |
+| `count_by_level` | Aggregate stats | "How many warnings today?" |
+
+#### Telemetry Dashboard Tools
+
+| Tool | Description | Example Intent |
+|------|-------------|----------------|
+| `query_metrics` | Time-series data | "CPU usage over last hour" |
+| `find_bottleneck` | Identify slow nodes | "What's the bottleneck?" |
+| `get_trace` | Fetch trace details | "Show trace abc123" |
+| `analyze_latency` | P50/P95/P99 stats | "What's the p99 latency?" |
+| `compare_metrics` | Before/after comparison | "Compare performance to yesterday" |
+| `get_topic_stats` | Message rates | "Which topic has highest throughput?" |
+
+### Example Interactions
+
+**Scenario 1: Start and Monitor**
+```
+User: "Start the object detection pipeline"
+
+AI: I'll start the object detection dataflow.
+    [Calling: start_dataflow("examples/yolo-detection.yml")]
+
+    ✓ Dataflow started (uuid: a1b2c3d4)
+    - Status: Running
+    - Nodes: 4 (camera, yolo, plot, sink)
+
+    All nodes healthy. Camera capturing at 30 FPS.
+```
+
+**Scenario 2: Debug Performance**
+```
+User: "The detection seems slow, why?"
+
+AI: Let me analyze performance metrics.
+    [Calling: get_node_metrics("a1b2c3d4")]
+
+    Found the bottleneck:
+
+    | Node   | CPU  | Memory | Latency |
+    |--------|------|--------|---------|
+    | camera | 12%  | 128MB  | 2ms     |
+    | yolo   | 98%  | 2.1GB  | 145ms ⚠️|
+    | plot   | 8%   | 64MB   | 5ms     |
+
+    The YOLO node is CPU-bound. Recommendations:
+    1. Enable GPU inference
+    2. Use lighter model (yolov8n)
+```
+
+**Scenario 3: Generate Dataflow**
+```
+User: "Create a dataflow for webcam pose detection"
+
+AI: I'll generate that dataflow.
+    [Calling: generate_dataflow(...)]
+
+    ```yaml
+    nodes:
+      - id: webcam
+        path: dora-webcam
+        outputs: [image]
+      - id: pose
+        path: dora-mediapipe
+        inputs:
+          image: webcam/image
+        outputs: [landmarks]
+    ```
+
+    Save to file or start immediately?
+```
+
+### Agent Architecture
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    AGENT COORDINATOR                        │
+│  ┌─────────────┐  ┌─────────────┐  ┌───────────────────┐   │
+│  │ Tool        │  │ Context     │  │ LLM Client        │   │
+│  │ Registry    │  │ Manager     │  │ (Multi-provider)  │   │
+│  └──────┬──────┘  └──────┬──────┘  └─────────┬─────────┘   │
+│         └────────────────┴───────────────────┘              │
+│                          │                                  │
+│                    AGENT LOOP                               │
+│         ┌────────────────┴────────────────┐                 │
+│         │ 1. Get current app context      │                 │
+│         │ 2. Send to LLM with app tools   │                 │
+│         │ 3. Execute tool calls locally   │                 │
+│         │ 4. Stream response to chat bar  │                 │
+│         │ 5. Update app state             │                 │
+│         └─────────────────────────────────┘                 │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### LLM Provider Strategy
+
+Multi-provider support with configuration:
+- **Claude API** (default): Best tool-use capabilities
+- **OpenAI**: Fallback option
+- **Local LLM** (Ollama): Privacy-focused, offline mode
+
+### Permission Model
+
+| Operation Type | Behavior |
+|---------------|----------|
+| Read (list, query, analyze) | Auto-approve |
+| Write (start, save, export) | Confirm with user |
+| Destructive (stop, destroy) | Always confirm |
+
+### AI Dependencies
+
+| Crate | Version | Purpose |
+|-------|---------|---------|
+| anthropic-sdk-rust | 0.1+ | Claude API client |
+| async-openai | 0.20+ | OpenAI fallback |
+| ollama-rs | 0.2+ | Local LLM support |
+
+---
+
 ## Appendix A: CLI Command Mapping
 
 | CLI Command | Dora Studio Equivalent |

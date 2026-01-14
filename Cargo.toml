@@ -60,3 +60,9 @@ anyhow = "1"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 chrono = { version = "0.4", features = ["serde"] }
+
+# AI Agent Layer (pure Rust)
+# anthropic-sdk-rust = "0.1"     # Claude API client (primary)
+# async-openai = "0.20"          # OpenAI fallback
+# ollama-rs = "0.2"              # Local LLM support (Ollama)
+async-trait = "0.1"              # Async trait support for LlmClient
