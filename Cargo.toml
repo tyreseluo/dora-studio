@@ -1,72 +1,41 @@
-# Dora Studio - Workspace Configuration
-#
-# 100% Rust Implementation - No C/C++ Dependencies
-#
-# NOTE: This is a scaffolding file for the planned workspace structure.
-# Workspace members will be created during implementation phases.
-# See PRD.md for the full project structure and development phases.
-
-[workspace]
-resolver = "2"
-members = [
-    # Core components (Phase 1)
-    # "dora-studio-shell",      # Binary: Main application
-    # "dora-studio-widgets",    # Library: Shared UI components
-    # "dora-studio-client",     # Library: Dora API client + storage
-
-    # Mini-apps (Phases 1-4)
-    # "apps/dataflow-manager",  # App: Dataflow lifecycle management
-    # "apps/yaml-editor",       # App: YAML editor + graph visualization
-    # "apps/log-viewer",        # App: Log streaming and filtering
-    # "apps/telemetry-dashboard", # App: Metrics, traces, topics
-]
-
-[workspace.package]
+[package]
+name = "dora-studio"
 version = "0.1.0"
 edition = "2021"
 license = "Apache-2.0"
 repository = "https://github.com/mofa-org/dora-studio"
+description = "Dora Studio - AI Chat Application built with Makepad"
 
-[workspace.dependencies]
+[dependencies]
 # UI Framework (pure Rust)
 makepad-widgets = { git = "https://github.com/makepad/makepad", branch = "rik" }
-
-# Makepad Components (pure Rust) - for dataflow visualization and dashboards
-makepad-flow = { git = "https://github.com/mofa-org/makepad-flow" }    # FlowCanvas for dataflow graphs
-makepad-chart = { git = "https://github.com/mofa-org/makepad-chart" }  # Charts (Line, Bar, Pie, etc.)
-
-# Async Runtime (pure Rust)
-tokio = { version = "1", features = ["full"] }
 
 # Serialization (pure Rust)
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-serde_yaml = "0.9"
 
-# Storage - Pure Rust (NO DuckDB - it has C++ core)
-# Using Apache Arrow ecosystem instead:
-datafusion = "44"          # SQL query engine (pure Rust)
-arrow = "53"               # Columnar memory format (pure Rust)
-parquet = "53"             # Columnar file storage (pure Rust)
-
-# gRPC (for OTLP receiver) - pure Rust
-# tonic = "0.10"
-# opentelemetry-proto = "0.4"
-
-# Dora Integration
-# dora-core = "0.4"
-# dora-node-api = "0.3"
-
-# Utilities (all pure Rust)
-uuid = { version = "1", features = ["v4", "serde"] }
-thiserror = "1"
+# Error handling
 anyhow = "1"
-tracing = "0.1"
-tracing-subscriber = { version = "0.3", features = ["env-filter"] }
-chrono = { version = "0.4", features = ["serde"] }
 
-# AI Agent Layer (pure Rust)
-# anthropic-sdk-rust = "0.1"     # Claude API client (primary)
-# async-openai = "0.20"          # OpenAI fallback
-# ollama-rs = "0.2"              # Local LLM support (Ollama)
-async-trait = "0.1"              # Async trait support for LlmClient
+# Native-only dependencies
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+# Async Runtime for native
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "time"] }
+# HTTP client for native
+reqwest = { version = "0.12", features = ["json"] }
+
+# WASM-only dependencies
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+# Async runtime for WASM
+tokio = { version = "1", features = ["sync", "macros", "rt", "time"] }
+# HTTP client for WASM
+reqwest = { version = "0.12", default-features = false, features = ["json"] }
+wasm-bindgen-futures = "0.4"
+
+[dev-dependencies]
+# Testing utilities
+tokio-test = "0.4"
+wiremock = "0.6"
+tempfile = "3"
+uuid = { version = "1", features = ["v4"] }
+chrono = "0.4"
