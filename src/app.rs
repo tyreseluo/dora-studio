@@ -1,4 +1,6 @@
 use makepad_widgets::*;
+use crate::dataflow::{DataflowInfo, DataflowTableWidgetRefExt};
+use crate::tools::execute_tool;
 
 live_design! {
     use link::theme::*;
@@ -6,6 +8,12 @@ live_design! {
     use link::widgets::*;
 
     use crate::chat::chat_screen::ChatScreen;
+    use crate::dataflow::dataflow_table::DataflowTable;
+
+    // Colors
+    SIDEBAR_BG = #1e293b
+    MAIN_BG = #f8fafc
+    DIVIDER_COLOR = #e2e8f0
 
     App = {{App}} {
         ui: <Root> {
@@ -13,10 +21,35 @@ live_design! {
                 window: { title: "Dora Studio" }
                 body = <View> {
                     width: Fill, height: Fill
+                    flow: Right
                     show_bg: true
-                    draw_bg: { color: #f5f5f5 }
+                    draw_bg: { color: (MAIN_BG) }
 
-                    <ChatScreen> {}
+                    // Left panel - Chat
+                    <View> {
+                        width: 400, height: Fill
+                        flow: Down
+                        show_bg: true
+                        draw_bg: { color: #ffffff }
+
+                        <ChatScreen> {}
+                    }
+
+                    // Divider
+                    <View> {
+                        width: 1, height: Fill
+                        show_bg: true
+                        draw_bg: { color: (DIVIDER_COLOR) }
+                    }
+
+                    // Right panel - Dataflow Table
+                    <View> {
+                        width: Fill, height: Fill
+                        flow: Down
+                        padding: { top: 16, left: 16, right: 16, bottom: 16 }
+
+                        dataflow_table = <DataflowTable> {}
+                    }
                 }
             }
         }
@@ -29,6 +62,10 @@ app_main!(App);
 pub struct App {
     #[live]
     ui: WidgetRef,
+    #[rust]
+    next_frame: NextFrame,
+    #[rust]
+    initialized: bool,
 }
 
 impl LiveRegister for App {
@@ -42,17 +79,114 @@ impl LiveRegister for App {
 }
 
 impl MatchEvent for App {
-    fn handle_startup(&mut self, _cx: &mut Cx) {
+    fn handle_startup(&mut self, cx: &mut Cx) {
         // Initialize API key from environment variable
         crate::api::init_api_key_from_env();
+
+        // Schedule initial data load for next frame (after UI is ready)
+        self.next_frame = cx.new_next_frame();
     }
-    fn handle_actions(&mut self, _cx: &mut Cx, _actions: &Actions) {}
+
+    fn handle_actions(&mut self, cx: &mut Cx, actions: &Actions) {
+        // Handle DataflowTable actions using direct button click checks
+        let table = self.ui.dataflow_table(id!(dataflow_table));
+
+        if table.refresh_clicked(actions) {
+            log!("[App] Refresh button clicked - refreshing dataflows");
+            self.refresh_dataflows(cx);
+        }
+
+        if let Some(uuid) = table.stop_clicked(actions) {
+            log!("[App] Stop button clicked for {}", uuid);
+            self.stop_dataflow(cx, &uuid);
+        }
+
+        if let Some(uuid) = table.destroy_clicked(actions) {
+            log!("[App] Destroy button clicked for {}", uuid);
+            self.destroy_dataflow(cx, &uuid);
+        }
+
+        if let Some(uuid) = table.logs_clicked(actions) {
+            log!("[App] Logs button clicked for {}", uuid);
+            self.view_dataflow_logs(&uuid);
+        }
+    }
 }
 
 impl AppMain for App {
     fn handle_event(&mut self, cx: &mut Cx, event: &Event) {
         self.match_event(cx, event);
+
+        // Handle next frame for delayed initialization
+        if self.next_frame.is_event(event).is_some() {
+            if !self.initialized {
+                self.initialized = true;
+                log!("[App] Initializing dataflow table on first frame");
+                self.refresh_dataflows(cx);
+            }
+        }
+
         self.ui.handle_event(cx, event, &mut Scope::empty());
+    }
+}
+
+impl App {
+    fn refresh_dataflows(&mut self, cx: &mut Cx) {
+        log!("[App] refresh_dataflows called");
+        let table = self.ui.dataflow_table(id!(dataflow_table));
+        table.set_loading(cx);
+
+        // Execute dora list command
+        let result = execute_tool("dora_list", "refresh", &serde_json::json!({}));
+        log!("[App] dora_list result: is_error={}, content={}", result.is_error, &result.content);
+
+        if result.is_error {
+            table.set_error(cx, &result.content);
+        } else {
+            // Try parsing as JSON array first, then NDJSON
+            let dataflows = if result.content.trim().starts_with('[') {
+                DataflowInfo::parse_json_array(&result.content)
+            } else {
+                DataflowInfo::parse_ndjson(&result.content)
+            };
+            log!("[App] Parsed {} dataflows", dataflows.len());
+            table.set_dataflows(cx, dataflows);
+        }
+    }
+
+    fn stop_dataflow(&mut self, cx: &mut Cx, uuid: &str) {
+        let args = serde_json::json!({ "dataflow_id": uuid });
+        let result = execute_tool("dora_stop", "stop", &args);
+
+        if result.is_error {
+            log!("Error stopping dataflow: {}", result.content);
+        }
+
+        // Refresh the table after stopping
+        self.refresh_dataflows(cx);
+    }
+
+    fn destroy_dataflow(&mut self, cx: &mut Cx, uuid: &str) {
+        let args = serde_json::json!({ "dataflow_id": uuid });
+        let result = execute_tool("dora_destroy", "destroy", &args);
+
+        if result.is_error {
+            log!("Error destroying dataflow: {}", result.content);
+        }
+
+        // Refresh the table after destroying
+        self.refresh_dataflows(cx);
+    }
+
+    fn view_dataflow_logs(&self, uuid: &str) {
+        let args = serde_json::json!({ "dataflow_id": uuid });
+        let result = execute_tool("dora_logs", "logs", &args);
+
+        if result.is_error {
+            log!("Error getting logs: {}", result.content);
+        } else {
+            log!("Dataflow logs for {}:\n{}", uuid, result.content);
+        }
     }
 }
 
