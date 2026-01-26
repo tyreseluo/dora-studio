@@ -1,0 +1,118 @@
+name: Package
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      create_release:
+        description: 'Create a GitHub release'
+        required: false
+        default: false
+        type: boolean
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  package:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Desktop platforms
+          - os: macos-latest
+            args: ""
+            name: macOS
+          - os: ubuntu-latest
+            args: ""
+            name: Linux
+          - os: windows-latest
+            args: ""
+            name: Windows
+          # Android
+          - os: ubuntu-latest
+            args: --target aarch64-linux-android
+            name: Android
+
+    runs-on: ${{ matrix.os }}
+    name: Build (${{ matrix.name }})
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-action@stable
+
+      - name: Package
+        uses: Project-Robius-China/makepad-packaging-action@v1
+        id: package
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          args: ${{ matrix.args }}
+          tagName: ${{ github.ref_type == 'tag' && github.ref_name || '' }}
+          releaseName: "Dora Studio ${{ github.ref_type == 'tag' && github.ref_name || '' }}"
+          releaseBody: |
+            ## Dora Studio Release
+
+            ### Downloads
+            See the assets below for platform-specific downloads.
+
+            ### Platforms
+            - macOS (Apple Silicon & Intel)
+            - Linux (x86_64)
+            - Windows (x86_64)
+            - Android (arm64)
+          releaseDraft: true
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: dora-studio-${{ matrix.name }}
+          path: |
+            target/release/*.dmg
+            target/release/*.app
+            target/release/*.deb
+            target/release/*.AppImage
+            target/release/*.exe
+            target/release/*.msi
+            target/makepad-android-project/*.apk
+          if-no-files-found: ignore
+
+  # iOS build (separate job, macOS only)
+  package-ios:
+    runs-on: macos-latest
+    name: Build (iOS)
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/')
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-action@stable
+
+      - name: Package iOS
+        uses: Project-Robius-China/makepad-packaging-action@v1
+        id: package
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          MAKEPAD_IOS_ORG: com.mofa
+          MAKEPAD_IOS_APP: dora-studio
+          MAKEPAD_IOS_SIM: true
+        with:
+          args: --target aarch64-apple-ios-sim
+          tagName: ${{ github.ref_type == 'tag' && github.ref_name || '' }}
+          releaseDraft: true
+
+      - name: Upload iOS artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: dora-studio-iOS
+          path: |
+            target/**/*.app
+            target/**/*.ipa
+          if-no-files-found: ignore
