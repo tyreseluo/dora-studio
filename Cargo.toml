@@ -44,12 +44,19 @@ chrono = "0.4"
 product_name = "Dora Studio"
 identifier = "com.mofa.dora-studio"
 category = "Utility"
-before_packaging_command = "robius-packaging-commands before-packaging --binary-name dora-studio --path-to-binary ./target/release/dora-studio"
 before_each_package_command = "robius-packaging-commands before-each-package --binary-name dora-studio --path-to-binary ./target/release/dora-studio"
 resources = [
+    # Makepad resources
     { src = "./dist/resources/makepad_widgets", target = "makepad_widgets" },
-    { src = "./dist/resources/dora_studio", target = "dora_studio" },
+    { src = "./dist/resources/makepad_fonts_chinese_bold", target = "makepad_fonts_chinese_bold" },
+    { src = "./dist/resources/makepad_fonts_chinese_bold_2", target = "makepad_fonts_chinese_bold_2" },
+    { src = "./dist/resources/makepad_fonts_chinese_regular", target = "makepad_fonts_chinese_regular" },
+    { src = "./dist/resources/makepad_fonts_chinese_regular_2", target = "makepad_fonts_chinese_regular_2" },
+    { src = "./dist/resources/makepad_fonts_emoji", target = "makepad_fonts_emoji" },
+    # Dora resources
+    # { src = "./dist/resources/dora_studio", target = "dora_studio" },
 ]
+out_dir = "./dist"
 
 [package.metadata.packager.macos]
 signing_identity = "-"

@@ -119,7 +119,7 @@ jobs:
       matrix:
         include:
           - os: ubuntu-22.04
-            packager_formats: deb,appimage
+            packager_formats: deb
             name: Linux
           - os: macos-14
             packager_formats: dmg
@@ -225,38 +225,4 @@ jobs:
           path: |
             target/**/*.app
             target/**/*.ipa
-          if-no-files-found: ignore
-
-  openharmony:
-    name: OpenHarmony
-    needs: create-release
-    if: ${{ always() && inputs.build_openharmony }}
-    runs-on: ubuntu-22.04
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Package (OpenHarmony)
-        uses: Project-Robius-China/makepad-packaging-action@main
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          OHOS_P12_BASE64: ${{ secrets.OHOS_P12_BASE64 }}
-          OHOS_PROFILE_BASE64: ${{ secrets.OHOS_PROFILE_BASE64 }}
-          OHOS_P12_PASSWORD: ${{ secrets.OHOS_P12_PASSWORD }}
-          OHOS_KEY_ALIAS: ${{ secrets.OHOS_KEY_ALIAS }}
-          OHOS_KEY_PASSWORD: ${{ secrets.OHOS_KEY_PASSWORD }}
-          OHOS_CERT_BASE64: ${{ secrets.OHOS_CERT_BASE64 }}
-        with:
-          args: --target aarch64-unknown-linux-ohos ${{ inputs.args }}
-          tagName: ${{ needs.create-release.outputs.release_tag }}
-
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: dora-studio-OpenHarmony
-          path: |
-            target/**/*.hap
           if-no-files-found: ignore
