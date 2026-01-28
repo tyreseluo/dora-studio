@@ -150,7 +150,7 @@ jobs:
     name: Android
     needs: create-release
     if: ${{ always() && (github.event_name == 'push' || inputs.build_android) }}
-    runs-on: ubuntu-22.04
+    runs-on: windows-2022
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -158,59 +158,59 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Install cargo-makepad
-        run: cargo install --force --git https://github.com/makepad/makepad.git --branch dev cargo-makepad
+      # - name: Install cargo-makepad
+      #   run: cargo install --force --git https://github.com/makepad/makepad.git --branch dev cargo-makepad
 
-      - name: Install Android toolchain (makepad)
-        run: cargo makepad android install-toolchain --full-ndk
+      # - name: Install Android toolchain (makepad)
+      #   run: cargo makepad android install-toolchain --full-ndk
 
-      - name: Build OpenSSL for Android (aarch64)
-        run: |
-          set -e
-          sudo apt-get update
-          sudo apt-get install -y build-essential perl pkg-config curl
+      # - name: Build OpenSSL for Android (aarch64)
+      #   run: |
+      #     set -e
+      #     sudo apt-get update
+      #     sudo apt-get install -y build-essential perl pkg-config curl
 
-          SDK_DIR=$(find ~/.cargo -type d -name android_33_linux_x64 -print -quit)
-          if [ -z "$SDK_DIR" ]; then
-            echo "Android SDK not found under ~/.cargo; cargo-makepad install-toolchain may have failed." >&2
-            exit 1
-          fi
+      #     SDK_DIR=$(find ~/.cargo -type d -name android_33_linux_x64 -print -quit)
+      #     if [ -z "$SDK_DIR" ]; then
+      #       echo "Android SDK not found under ~/.cargo; cargo-makepad install-toolchain may have failed." >&2
+      #       exit 1
+      #     fi
 
-          NDK_VERSION="25.2.9519653"
-          NDK_ROOT="$SDK_DIR/ndk/$NDK_VERSION"
-          if [ ! -d "$NDK_ROOT" ]; then
-            echo "NDK not found at $NDK_ROOT" >&2
-            ls -la "$SDK_DIR/ndk" || true
-            exit 1
-          fi
+      #     NDK_VERSION="25.2.9519653"
+      #     NDK_ROOT="$SDK_DIR/ndk/$NDK_VERSION"
+      #     if [ ! -d "$NDK_ROOT" ]; then
+      #       echo "NDK not found at $NDK_ROOT" >&2
+      #       ls -la "$SDK_DIR/ndk" || true
+      #       exit 1
+      #     fi
 
-          OPENSSL_VERSION="3.0.13"
-          WORKDIR="${RUNNER_TEMP:-/tmp}/openssl-android"
-          mkdir -p "$WORKDIR"
-          cd "$WORKDIR"
+      #     OPENSSL_VERSION="3.0.13"
+      #     WORKDIR="${RUNNER_TEMP:-/tmp}/openssl-android"
+      #     mkdir -p "$WORKDIR"
+      #     cd "$WORKDIR"
 
-          curl -L "https://www.openssl.org/source/openssl-${OPENSSL_VERSION}.tar.gz" | tar xz
-          cd "openssl-${OPENSSL_VERSION}"
+      #     curl -L "https://www.openssl.org/source/openssl-${OPENSSL_VERSION}.tar.gz" | tar xz
+      #     cd "openssl-${OPENSSL_VERSION}"
 
-          export ANDROID_NDK_HOME="$NDK_ROOT"
-          export ANDROID_API=21
-          export PATH="$NDK_ROOT/toolchains/llvm/prebuilt/linux-x86_64/bin:$PATH"
-          export CC="aarch64-linux-android${ANDROID_API}-clang"
-          export AR="llvm-ar"
-          export RANLIB="llvm-ranlib"
-          export STRIP="llvm-strip"
-          ./Configure android-arm64 -D__ANDROID_API__=$ANDROID_API --prefix=$PWD/_install no-shared
-          make -j"$(nproc)"
-          make install_sw
+      #     export ANDROID_NDK_HOME="$NDK_ROOT"
+      #     export ANDROID_API=21
+      #     export PATH="$NDK_ROOT/toolchains/llvm/prebuilt/linux-x86_64/bin:$PATH"
+      #     export CC="aarch64-linux-android${ANDROID_API}-clang"
+      #     export AR="llvm-ar"
+      #     export RANLIB="llvm-ranlib"
+      #     export STRIP="llvm-strip"
+      #     ./Configure android-arm64 -D__ANDROID_API__=$ANDROID_API --prefix=$PWD/_install no-shared
+      #     make -j"$(nproc)"
+      #     make install_sw
 
-          echo "OPENSSL_DIR=$PWD/_install" >> $GITHUB_ENV
-          echo "OPENSSL_LIB_DIR=$PWD/_install/lib" >> $GITHUB_ENV
-          echo "OPENSSL_INCLUDE_DIR=$PWD/_install/include" >> $GITHUB_ENV
-          echo "AARCH64_LINUX_ANDROID_OPENSSL_DIR=$PWD/_install" >> $GITHUB_ENV
-          echo "AARCH64_LINUX_ANDROID_OPENSSL_LIB_DIR=$PWD/_install/lib" >> $GITHUB_ENV
-          echo "AARCH64_LINUX_ANDROID_OPENSSL_INCLUDE_DIR=$PWD/_install/include" >> $GITHUB_ENV
-          echo "PKG_CONFIG_ALLOW_CROSS=1" >> $GITHUB_ENV
-          echo "OPENSSL_STATIC=1" >> $GITHUB_ENV
+      #     echo "OPENSSL_DIR=$PWD/_install" >> $GITHUB_ENV
+      #     echo "OPENSSL_LIB_DIR=$PWD/_install/lib" >> $GITHUB_ENV
+      #     echo "OPENSSL_INCLUDE_DIR=$PWD/_install/include" >> $GITHUB_ENV
+      #     echo "AARCH64_LINUX_ANDROID_OPENSSL_DIR=$PWD/_install" >> $GITHUB_ENV
+      #     echo "AARCH64_LINUX_ANDROID_OPENSSL_LIB_DIR=$PWD/_install/lib" >> $GITHUB_ENV
+      #     echo "AARCH64_LINUX_ANDROID_OPENSSL_INCLUDE_DIR=$PWD/_install/include" >> $GITHUB_ENV
+      #     echo "PKG_CONFIG_ALLOW_CROSS=1" >> $GITHUB_ENV
+      #     echo "OPENSSL_STATIC=1" >> $GITHUB_ENV
 
       - name: Package (android)
         uses: Project-Robius-China/makepad-packaging-action@main
