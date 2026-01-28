@@ -18,10 +18,6 @@ on:
         description: "Build iOS app"
         type: boolean
         default: true
-      build_openharmony:
-        description: "Build OpenHarmony HAP"
-        type: boolean
-        default: false
       release_tag:
         description: "Release tag (optional, supports __VERSION__)"
         type: string
@@ -103,8 +99,7 @@ jobs:
             - Linux (x86_64)
             - Windows (x86_64)
             - Android (arm64)
-            - iOS (arm64)
-            - OpenHarmony (arm64)' }}
+            - iOS (arm64)' }}
           draft: ${{ inputs.release_draft || false }}
           prerelease: ${{ inputs.prerelease || false }}
         env:
@@ -147,22 +142,9 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
+          releaseId: ${{ needs.create-release.outputs.release_id }}
           args: ${{ inputs.args }}
           packager_formats: ${{ matrix.packager_formats }}
-          tagName: ${{ needs.create-release.outputs.release_tag }}
-
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: dora-studio-${{ matrix.name }}
-          path: |
-            dist/*.dmg
-            dist/*.app
-            dist/*.deb
-            dist/*.AppImage
-            dist/*.exe
-            dist/*.msi
-          if-no-files-found: ignore
 
   android:
     name: Android
@@ -181,16 +163,8 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
+          releaseId: ${{ needs.create-release.outputs.release_id }}
           args: --target aarch64-linux-android ${{ inputs.args }}
-          tagName: ${{ needs.create-release.outputs.release_tag }}
-
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: dora-studio-Android
-          path: |
-            target/makepad-android-apk/dora-studio/*.apk
-          if-no-files-found: ignore
 
   ios:
     name: iOS
@@ -215,14 +189,5 @@ jobs:
           APPLE_PROVISIONING_PROFILE: ${{ secrets.APPLE_PROVISIONING_PROFILE }}
           APPLE_KEYCHAIN_PASSWORD: ${{ secrets.APPLE_KEYCHAIN_PASSWORD }}
         with:
+          releaseId: ${{ needs.create-release.outputs.release_id }}
           args: --target aarch64-apple-ios ${{ inputs.args }}
-          tagName: ${{ needs.create-release.outputs.release_tag }}
-
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: dora-studio-iOS
-          path: |
-            target/makepad-apple-app/aarch64-apple-ios/release/*.app
-            target/makepad-apple-app/aarch64-apple-ios/release/*.ipa
-          if-no-files-found: ignore
