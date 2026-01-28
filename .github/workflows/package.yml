@@ -194,6 +194,11 @@ jobs:
 
           export ANDROID_NDK_HOME="$NDK_ROOT"
           export ANDROID_API=21
+          export PATH="$NDK_ROOT/toolchains/llvm/prebuilt/linux-x86_64/bin:$PATH"
+          export CC="aarch64-linux-android${ANDROID_API}-clang"
+          export AR="llvm-ar"
+          export RANLIB="llvm-ranlib"
+          export STRIP="llvm-strip"
           ./Configure android-arm64 -D__ANDROID_API__=$ANDROID_API --prefix=$PWD/_install no-shared
           make -j"$(nproc)"
           make install_sw
