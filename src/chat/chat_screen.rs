@@ -185,14 +185,17 @@ impl Widget for ChatScreen {
 
 impl WidgetMatchEvent for ChatScreen {
     fn handle_actions(&mut self, cx: &mut Cx, actions: &Actions, _scope: &mut Scope) {
-        if self.view.button(id!(send_button)).clicked(&actions) {
+        if self.view.button(ids!(send_button)).clicked(&actions) {
             self.send_message(cx);
         }
 
-        if let Some(text) = self.view.text_input(id!(message_input)).returned(&actions) {
-            if !text.is_empty() {
-                self.send_message(cx);
-            }
+        if self
+            .view
+            .text_input(ids!(message_input))
+            .returned(&actions)
+            .is_some()
+        {
+            self.send_message(cx);
         }
     }
 }
@@ -214,7 +217,7 @@ impl ChatScreen {
                 };
 
                 let item = list.item(cx, item_id, template);
-                item.label(id!(label)).set_text(cx, &msg.content);
+                item.label(ids!(label)).set_text(cx, &msg.content);
                 item.draw_all(cx, &mut Scope::empty());
             } else if self.is_loading && item_id == self.messages.len() {
                 // Render loading indicator (only one, right after messages)
@@ -231,12 +234,12 @@ impl ChatScreen {
         } else {
             format!("{} messages", self.messages.len())
         };
-        self.view.label(id!(status_label)).set_text(cx, &status);
+        self.view.label(ids!(status_label)).set_text(cx, &status);
         self.redraw(cx);
     }
 
     fn send_message(&mut self, cx: &mut Cx) {
-        let input = self.view.text_input(id!(message_input));
+        let input = self.view.text_input(ids!(message_input));
         let text = input.text();
         if text.trim().is_empty() {
             return;

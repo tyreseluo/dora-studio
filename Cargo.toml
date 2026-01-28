@@ -8,7 +8,7 @@ description = "Dora Studio - AI Chat Application built with Makepad"
 
 [dependencies]
 # UI Framework (pure Rust)
-makepad-widgets = { git = "https://github.com/makepad/makepad", branch = "rik" }
+makepad-widgets = { git = "https://github.com/makepad/makepad", branch = "dev" }
 
 # Serialization (pure Rust)
 serde = { version = "1", features = ["derive"] }

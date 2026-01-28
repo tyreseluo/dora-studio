@@ -95,7 +95,7 @@ impl MatchEvent for App {
 
     fn handle_actions(&mut self, cx: &mut Cx, actions: &Actions) {
         // Handle DataflowTable actions using direct button click checks
-        let table = self.ui.dataflow_table(id!(dataflow_table));
+        let table = self.ui.dataflow_table(ids!(dataflow_table));
 
         if table.refresh_clicked(actions) {
             log!("[App] Refresh button clicked - refreshing dataflows");
@@ -150,7 +150,7 @@ impl AppMain for App {
 impl App {
     fn refresh_dataflows(&mut self, cx: &mut Cx) {
         log!("[App] refresh_dataflows called");
-        let table = self.ui.dataflow_table(id!(dataflow_table));
+        let table = self.ui.dataflow_table(ids!(dataflow_table));
         table.set_loading(cx);
 
         // Execute dora list command

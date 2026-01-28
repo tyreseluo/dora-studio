@@ -458,7 +458,7 @@ impl WidgetMatchEvent for DataflowTable {
         );
 
         // Handle refresh button
-        let refresh_btn = self.view.button(id!(refresh_button));
+        let refresh_btn = self.view.button(ids!(refresh_button));
         let btn_exists = refresh_btn.borrow().is_some();
         log!("[DataflowTable] refresh_button exists: {}", btn_exists);
 
@@ -471,12 +471,12 @@ impl WidgetMatchEvent for DataflowTable {
         }
 
         // Handle row action buttons via PortalList
-        let table_list = self.view.portal_list(id!(table_list));
+        let table_list = self.view.portal_list(ids!(table_list));
         for (item_id, item) in table_list.items_with_actions(actions) {
             if item_id < self.dataflows.len() {
                 let uuid = self.dataflows[item_id].uuid.clone();
 
-                if item.button(id!(stop_button)).clicked(actions) {
+                if item.button(ids!(stop_button)).clicked(actions) {
                     cx.widget_action(
                         self.widget_uid(),
                         &scope.path,
@@ -484,7 +484,7 @@ impl WidgetMatchEvent for DataflowTable {
                     );
                 }
 
-                if item.button(id!(destroy_button)).clicked(actions) {
+                if item.button(ids!(destroy_button)).clicked(actions) {
                     cx.widget_action(
                         self.widget_uid(),
                         &scope.path,
@@ -492,7 +492,7 @@ impl WidgetMatchEvent for DataflowTable {
                     );
                 }
 
-                if item.button(id!(logs_button)).clicked(actions) {
+                if item.button(ids!(logs_button)).clicked(actions) {
                     cx.widget_action(
                         self.widget_uid(),
                         &scope.path,
@@ -512,7 +512,7 @@ impl DataflowTable {
         self.loading_state = TableLoadingState::Idle;
         log!("[DataflowTable] calling redraw");
         // Redraw the PortalList specifically to ensure it updates
-        self.view.portal_list(id!(table_list)).redraw(cx);
+        self.view.portal_list(ids!(table_list)).redraw(cx);
         self.redraw(cx);
     }
 
@@ -520,7 +520,7 @@ impl DataflowTable {
     pub fn set_from_ndjson(&mut self, cx: &mut Cx, ndjson: &str) {
         self.dataflows = DataflowInfo::parse_ndjson(ndjson);
         self.loading_state = TableLoadingState::Idle;
-        self.view.portal_list(id!(table_list)).redraw(cx);
+        self.view.portal_list(ids!(table_list)).redraw(cx);
         self.redraw(cx);
     }
 
@@ -528,14 +528,14 @@ impl DataflowTable {
     pub fn set_from_json(&mut self, cx: &mut Cx, json: &str) {
         self.dataflows = DataflowInfo::parse_json_array(json);
         self.loading_state = TableLoadingState::Idle;
-        self.view.portal_list(id!(table_list)).redraw(cx);
+        self.view.portal_list(ids!(table_list)).redraw(cx);
         self.redraw(cx);
     }
 
     /// Set loading state
     pub fn set_loading(&mut self, cx: &mut Cx) {
         self.loading_state = TableLoadingState::Loading;
-        self.view.portal_list(id!(table_list)).redraw(cx);
+        self.view.portal_list(ids!(table_list)).redraw(cx);
         self.redraw(cx);
     }
 
@@ -543,7 +543,7 @@ impl DataflowTable {
     pub fn set_error(&mut self, cx: &mut Cx, message: &str) {
         self.loading_state = TableLoadingState::Error;
         self.error_message = message.to_string();
-        self.view.portal_list(id!(table_list)).redraw(cx);
+        self.view.portal_list(ids!(table_list)).redraw(cx);
         self.redraw(cx);
     }
 
@@ -567,7 +567,7 @@ impl DataflowTable {
         self.dataflows.clear();
         self.selected_row = None;
         self.loading_state = TableLoadingState::Idle;
-        self.view.portal_list(id!(table_list)).redraw(cx);
+        self.view.portal_list(ids!(table_list)).redraw(cx);
         self.redraw(cx);
     }
 
@@ -622,11 +622,11 @@ impl DataflowTable {
                 let item = list.item(cx, item_id, template);
 
                 // Set row data
-                item.label(id!(uuid_label)).set_text(cx, &df.uuid_short());
-                item.label(id!(name_label)).set_text(cx, &df.name);
-                item.label(id!(status_label)).set_text(cx, &df.status);
-                item.label(id!(cpu_label)).set_text(cx, &df.cpu_formatted());
-                item.label(id!(memory_label))
+                item.label(ids!(uuid_label)).set_text(cx, &df.uuid_short());
+                item.label(ids!(name_label)).set_text(cx, &df.name);
+                item.label(ids!(status_label)).set_text(cx, &df.status);
+                item.label(ids!(cpu_label)).set_text(cx, &df.cpu_formatted());
+                item.label(ids!(memory_label))
                     .set_text(cx, &df.memory_formatted());
 
                 log!(
@@ -707,7 +707,7 @@ impl DataflowTableRef {
     /// Check if the refresh button was clicked (direct check, bypasses action system)
     pub fn refresh_clicked(&self, actions: &Actions) -> bool {
         if let Some(inner) = self.borrow() {
-            inner.view.button(id!(refresh_button)).clicked(actions)
+            inner.view.button(ids!(refresh_button)).clicked(actions)
         } else {
             false
         }
@@ -716,10 +716,10 @@ impl DataflowTableRef {
     /// Check if a stop button was clicked, returns the UUID if so
     pub fn stop_clicked(&self, actions: &Actions) -> Option<String> {
         if let Some(inner) = self.borrow() {
-            let table_list = inner.view.portal_list(id!(table_list));
+            let table_list = inner.view.portal_list(ids!(table_list));
             for (item_id, item) in table_list.items_with_actions(actions) {
                 if item_id < inner.dataflows.len() {
-                    if item.button(id!(stop_button)).clicked(actions) {
+                    if item.button(ids!(stop_button)).clicked(actions) {
                         return Some(inner.dataflows[item_id].uuid.clone());
                     }
                 }
@@ -731,10 +731,10 @@ impl DataflowTableRef {
     /// Check if a destroy button was clicked, returns the UUID if so
     pub fn destroy_clicked(&self, actions: &Actions) -> Option<String> {
         if let Some(inner) = self.borrow() {
-            let table_list = inner.view.portal_list(id!(table_list));
+            let table_list = inner.view.portal_list(ids!(table_list));
             for (item_id, item) in table_list.items_with_actions(actions) {
                 if item_id < inner.dataflows.len() {
-                    if item.button(id!(destroy_button)).clicked(actions) {
+                    if item.button(ids!(destroy_button)).clicked(actions) {
                         return Some(inner.dataflows[item_id].uuid.clone());
                     }
                 }
@@ -746,10 +746,10 @@ impl DataflowTableRef {
     /// Check if a logs button was clicked, returns the UUID if so
     pub fn logs_clicked(&self, actions: &Actions) -> Option<String> {
         if let Some(inner) = self.borrow() {
-            let table_list = inner.view.portal_list(id!(table_list));
+            let table_list = inner.view.portal_list(ids!(table_list));
             for (item_id, item) in table_list.items_with_actions(actions) {
                 if item_id < inner.dataflows.len() {
-                    if item.button(id!(logs_button)).clicked(actions) {
+                    if item.button(ids!(logs_button)).clicked(actions) {
                         return Some(inner.dataflows[item_id].uuid.clone());
                     }
                 }
