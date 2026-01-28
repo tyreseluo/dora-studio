@@ -156,12 +156,12 @@ jobs:
         with:
           name: dora-studio-${{ matrix.name }}
           path: |
-            target/release/*.dmg
-            target/release/*.app
-            target/release/*.deb
-            target/release/*.AppImage
-            target/release/*.exe
-            target/release/*.msi
+            dist/*.dmg
+            dist/*.app
+            dist/*.deb
+            dist/*.AppImage
+            dist/*.exe
+            dist/*.msi
           if-no-files-found: ignore
 
   android:
@@ -189,7 +189,7 @@ jobs:
         with:
           name: dora-studio-Android
           path: |
-            target/makepad-android-project/*.apk
+            target/makepad-android-apk/dora-studio/*.apk
           if-no-files-found: ignore
 
   ios:
@@ -223,6 +223,6 @@ jobs:
         with:
           name: dora-studio-iOS
           path: |
-            target/**/*.app
-            target/**/*.ipa
+            target/makepad-apple-app/aarch64-apple-ios/release/*.app
+            target/makepad-apple-app/aarch64-apple-ios/release/*.ipa
           if-no-files-found: ignore
