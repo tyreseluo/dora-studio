@@ -157,6 +157,13 @@ jobs:
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
+      
+      # Dora Studio Android build requires OpenSSL
+      - name: Install OpenSSL
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libssl-dev pkg-config
+
 
       - name: Package (android)
         uses: Project-Robius-China/makepad-packaging-action@main
